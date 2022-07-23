@@ -16,14 +16,17 @@ socket_delay_ms = 50
 class World():
     def __init__(self, backend):
         self.backend = backend
-        self.deq = deque(iterable=(), maxlen=100)
+        self.deq = deque((), 100)
 
         # set date from the internet, or set to fixed moment
         self.rtc = machine.RTC()
         resp = urequests.request("GET", "https://rashell.pl/rpi/time.php")
         if resp.status_code == 200:
             year, month, day, hour, minute, seconds = resp.text.split("\t")
-            self.rtc.datetime((year, month, day, hour, minute, seconds))
+            moment = (int(year), int(month), int(day), int(hour), int(minute), int(seconds), 0, 0)
+            print("Setting time to", moment)
+            self.rtc.datetime(moment)
+            print("Set time to", self.rtc.datetime()[0:3],'year month day weekday hour minute seconds, mircoseconds, nanosecs')
         else:
             self.rtc.datetime((2022, 1, 1))
 
@@ -33,7 +36,7 @@ class World():
         self.autopush_task = uasyncio.create_task(self.autopush())
 
     def report(self, data):
-        self.deq.append((self.rtc.now(), data))
+        self.deq.append((self.rtc.datetime(), data))
 
     async def autopush(self):
         while True:
