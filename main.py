@@ -3,6 +3,7 @@ import uasyncio
 from libs.dust import dust_gen
 from libs.fan import fan_blink
 from libs.led import led_blink
+from libs.wifi import Connect
 
 
 async def main_led():
@@ -14,17 +15,16 @@ async def main_led():
     t1.cancel()
     t2.cancel()
 
-async def pi_dust():
+async def pi_dust(backend, cycle_delay_secs=10):
     print("starting pidust...")
     task_led = uasyncio.create_task(led_blink(pin=25))
     try:
         dust = dust_gen(led_pin_num=3, adc_pin_num=26)
-        for _ in range(0,1000):
-            print("it: ", _)
+        while True:
+            # print("it: ", _)
             v = dust.send(None)
-            print(v)
-            await uasyncio.sleep(1) #seconds
-        print("end pidust.")
+            backend.report(v)
+            await uasyncio.sleep(cycle_delay_secs) #seconds
     finally:
         task_led.cancel()
         print("end pidust done.")
@@ -37,6 +37,8 @@ def set_network():
 
 try:
     print("running pidust via main.py")
-    uasyncio.run(pi_dust())
+    import secrets
+    backend = Connect(secrets.SSID, secrets.PASSWORD, 'http://rashell.pl/rpi/index.php')
+    uasyncio.run(pi_dust(backend, cycle_delay_secs=10))
 except KeyboardInterrupt:
     print("keyboard interrupt exception...")

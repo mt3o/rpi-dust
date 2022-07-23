@@ -1,36 +1,32 @@
+import time
+
 import machine
 import uasyncio
 
+from collections import namedtuple
 
-class DustResult:
-    def __init__(self):
-        self.density = -1
-        self.mv = 0
-        self.voc = 0
-        self.max = 0
-        self.fresh = True
+from utime import ticks_diff
 
-    def __str__(self):
-        return "{mv} mV / {density} ug/m3 (Voc={voc}) | Max: {max_} ug/m3 Fresh: {fresh}".format(
-            mv=self.mv,
-            density=self.density,
-            voc=self.voc,
-            max_=self.max,
-            fresh=self.fresh
-        )
+DustResult = namedtuple('DustResult', ("density", "max"))
+
+
+def print_DustResult(dustresult: DustResult):
+    return "Density {density} ug/m3 | Max: {max_} ug/m3".format(
+        density=dustresult.density,
+        max_=dustresult.max
+    )
 
 
 def dust_gen(led_pin_num,
              adc_pin_num,
              sample_size=100,
              sampling_time=0.00028,
-             delta_time=0.00004,
-             sleep_time=0.00968,
+             sleep_time=0.01, #10 microseconds
              voc=0.6,
              max_so_far=0,
              debug_print_each_update=True
              ):
-
+    sleep_time = sleep_time - sampling_time
     # pin setup
     led_pin = machine.Pin(led_pin_num, machine.Pin.OUT)  # D0
     vo_pin = machine.ADC(machine.Pin(adc_pin_num))  # A0
@@ -47,48 +43,44 @@ def dust_gen(led_pin_num,
         max_so_far = max(max_so_far, density)
         return density
 
-    out = DustResult()
-    out.density = -1
-    out.mv = 0
-    out.voc = -1
-    out.max = -1
-    out.fresh = False
+    out = DustResult(-1, 0)
 
     async def updating():
         nonlocal out
-        vals = []
+
+        # value storage
+        sumval = 0
+        counter = 0
+
         if debug_print_each_update:
             print("starting dust scanner task")
         while True:
             try:
                 led_pin.value(0)  # turn off sensor led
                 await uasyncio.sleep(sampling_time)
-                vals.append(vo_pin.read_u16())  # collect the value
-                await uasyncio.sleep(delta_time)
+                t1 = time.ticks_ms()
+                sumval += vo_pin.read_u16()  # collect the value
+                counter += 1
+                t2 = time.ticks_ms()
                 led_pin.value(1)  # turn on sensor led
-                await uasyncio.sleep(sleep_time)
+                await uasyncio.sleep(sleep_time - ticks_diff(t2, t1) * 1_000)
 
-                if len(vals) < sample_size:
-                    #print("not enough samples: ", len(vals), "should be at least", sample_size)
+                if counter < sample_size:
+                    # print("not enough samples: ", len(vals), "should be at least", sample_size)
                     pass
                 else:
-                    avg = sum(vals) / len(vals)
-                    volt = avg * 3.3 / 65535
+                    avg = sumval / sample_size
+                    volt = avg * 5 / 65535
                     density = calc_density(volt)
-                    mv = volt * 1000
 
-                    out = DustResult()
-                    out.density = round(density, 2)
-                    out.mv = mv
-                    out.voc = voc
-                    out.max = max_so_far
-                    out.fresh = True
+                    out = DustResult(
+                        round(density, 2),
+                        round(max_so_far, 2)
+                    )
+                    # finally, reset the values
+                    sumval = 0
+                    counter = 0
 
-                    # if debug_print_each_update:
-                    #     print("collected so far", out)
-                    vals = []
-                    # if debug_print_each_update:
-                    #     print("dust scan done.")
             except KeyboardInterrupt:
                 break
             except Exception:
@@ -103,7 +95,6 @@ def dust_gen(led_pin_num,
         while True:
             # print("returning from dust gen", out)
             yield out
-            out.fresh = False
 
     except GeneratorExit:
         print("ending generator")

@@ -1,0 +1,4 @@
+POST http://rashell.pl/rpi/index.php
+Content-type: application/json
+
+{"dupa": 'dupa2'}
