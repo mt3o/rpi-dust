@@ -21,7 +21,7 @@ def dust_gen(led_pin_num,
              adc_pin_num,
              sample_size=100,
              sampling_time=0.00028,
-             sleep_time=0.01, #10 microseconds
+             sleep_time=0.01,
              voc=0.6,
              max_so_far=0,
              debug_print_each_update=True
@@ -57,18 +57,25 @@ def dust_gen(led_pin_num,
         while True:
             try:
                 led_pin.value(0)  # turn off sensor led
+                # print("waiting sampling_time", sampling_time)
                 await uasyncio.sleep(sampling_time)
+                # print("waited sampling_time", sampling_time)
+
                 t1 = time.ticks_ms()
                 sumval += vo_pin.read_u16()  # collect the value
                 counter += 1
                 t2 = time.ticks_ms()
                 led_pin.value(1)  # turn on sensor led
-                await uasyncio.sleep(sleep_time - ticks_diff(t2, t1) * 1_000)
+                slp = sleep_time - ticks_diff(t2, t1)
+                # print("waiting sleep_time", sleep_time, "minus ticks diff", ticks_diff(t2, t1), "giving", slp)
+                await uasyncio.sleep(slp)
+                # print("waited sleep_time.")
 
                 if counter < sample_size:
-                    # print("not enough samples: ", len(vals), "should be at least", sample_size)
+                    # print("not enough samples: ", counter, "should be at least", sample_size)
                     pass
                 else:
+
                     avg = sumval / sample_size
                     volt = avg * 5 / 65535
                     density = calc_density(volt)
@@ -80,6 +87,7 @@ def dust_gen(led_pin_num,
                     # finally, reset the values
                     sumval = 0
                     counter = 0
+                    # print("has sample", out)
 
             except KeyboardInterrupt:
                 break

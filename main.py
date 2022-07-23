@@ -24,6 +24,7 @@ async def pi_dust(backend, cycle_delay_secs=10):
             # print("it: ", _)
             v = dust.send(None)
             backend.report(v)
+            print("reported", v)
             await uasyncio.sleep(cycle_delay_secs) #seconds
     finally:
         task_led.cancel()

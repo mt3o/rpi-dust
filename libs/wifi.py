@@ -18,17 +18,29 @@ class World():
         self.backend = backend
         self.deq = deque((), 100)
 
-        # set date from the internet, or set to fixed moment
-        self.rtc = machine.RTC()
-        resp = urequests.request("GET", "https://rashell.pl/rpi/time.php")
-        if resp.status_code == 200:
-            year, month, day, hour, minute, seconds = resp.text.split("\t")
-            moment = (int(year), int(month), int(day), int(hour), int(minute), int(seconds), 0, 0)
-            print("Setting time to", moment)
-            self.rtc.datetime(moment)
-            print("Set time to", self.rtc.datetime()[0:3],'year month day weekday hour minute seconds, mircoseconds, nanosecs')
+        for i in range(0,5):
+            try:
+                # set date from the internet, or set to fixed moment
+                self.rtc = machine.RTC()
+                resp = urequests.request("GET", "https://rashell.pl/rpi/time.php")
+                if resp.status_code == 200:
+                    year, month, day, hour, minute, seconds = resp.text.split("\t")
+                    moment = (int(year), int(month), int(day), int(hour), int(minute), int(seconds), 0, 0)
+                    print("Setting time to", moment)
+                    self.rtc.datetime(moment)
+                    print("Set time to", self.rtc.datetime(), 'year month day weekday hour minute seconds, mircoseconds')
+                else:
+                    print("setting time to fallback")
+                    self.rtc.datetime((2022, 1, 1, 0,0,0,0,0))
+                break #positive end
+            except OSError as e:
+                print("Got error while setting time, waiting for 10s and will retry",e)
+                time.sleep(10)
+                continue
         else:
-            self.rtc.datetime((2022, 1, 1))
+            print("failed to set time, using fallback")
+            self.rtc.datetime((2022, 2, 1,0,0,0,0,0))
+
 
         # finally clear memory
         gc.collect()
@@ -36,10 +48,14 @@ class World():
         self.autopush_task = uasyncio.create_task(self.autopush())
 
     def report(self, data):
+        if(len(self.deq))==100:
+            print('autopush queue full, dropping items')
         self.deq.append((self.rtc.datetime(), data))
 
     async def autopush(self):
+        print("autopush started")
         while True:
+            # print("autopush iteration")
             while len(self.deq) > 0:
                 now, data = self.deq.popleft()
                 for retry in range(0, 5):  # max number of retries
@@ -54,14 +70,15 @@ class World():
                         if response.status_code != 200:
                             print('response NOT ok', response.status_code, "\n", response.text)
                         gc.collect()
+                        # print("autopush iter done")
                         break  # successfully pushed to the server, breaking the retry loop
                     except OSError as e:
                         print("failed to push data over network", e)
                         gc.collect()
                         continue
                     finally:
-                        await uasyncio.sleep_ms(100)
-            await uasyncio.sleep(1)
+                        await uasyncio.sleep_ms(10)
+            await uasyncio.sleep(0.1)
 
 
 class WorldNoop:
