@@ -76,9 +76,33 @@ Transistor emitter -> GND
 
 Relay GND -> GND line
 Relay VCC -> 5+V line
-Relay IN -> Transistor Collector 
+Relay IN -> Transistor Collector (2 of 2) 
                      
 Relay Common pin (middle) -> 230V 
 Relay Enabled pin -> 230V             
-Relay common+Enabled pin => part of power supply to the air duct fan
+Relay common+Enabled pin => in series with the air duct fan() as part of its 230V circuit)
 relay opens/closes the circuit with regular 230V
+
+---
+VBUS:
+    5VCC line:
+        Fan 5v
+        Dust sensor adapter 2x
+        Relay 5V
+        100 ohm
+            transistor collector (1 of 2)
+        
+Pi Gnd:
+    GND line
+        Fan GND
+        Dust sensor adapter 2x
+        Transistor emitter
+        Relay GND
+        
+
+Signals
+GP0 -> Fan signal pin
+GP3 -> Dust Sensor Adapter D pin (3rd from top)
+GP 10 -> 10k ohm rezo -> transistor base
+GP27_A1 -> Dust Sensor Adapter A pin (lowest)
+
