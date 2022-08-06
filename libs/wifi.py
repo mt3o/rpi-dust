@@ -18,14 +18,14 @@ class World():
         self.backend = backend
         self.deq = deque((), 100)
 
-        for i in range(0,5):
+        for i in range(0,25):
             try:
                 # set date from the internet, or set to fixed moment
                 self.rtc = machine.RTC()
                 resp = urequests.request("GET", "https://rashell.pl/rpi/time.php")
                 if resp.status_code == 200:
-                    year, month, day, hour, minute, seconds = resp.text.split("\t")
-                    moment = (int(year), int(month), int(day), int(hour), int(minute), int(seconds), 0, 0)
+                    year, month, day, dayofweek, hour, minute, seconds = resp.text.split("\t")
+                    moment = (int(year), int(month), int(day), int(dayofweek), int(hour), int(minute), int(seconds), 0)
                     print("Setting time to", moment)
                     self.rtc.datetime(moment)
                     print("Set time to", self.rtc.datetime(), 'year month day weekday hour minute seconds, mircoseconds')
@@ -47,23 +47,24 @@ class World():
 
         self.autopush_task = uasyncio.create_task(self.autopush())
 
-    def report(self, data):
+    def report(self, data, status=None):
         if(len(self.deq))==100:
             print('autopush queue full, dropping items')
-        self.deq.append((self.rtc.datetime(), data))
+        self.deq.append((self.rtc.datetime(), data, status))
 
     async def autopush(self):
         print("autopush started")
         while True:
             # print("autopush iteration")
+            #Should be rewritten with MQTT
             while len(self.deq) > 0:
-                now, data = self.deq.popleft()
+                now, data, status = self.deq.popleft()
                 for retry in range(0, 5):  # max number of retries
                     try:
                         response = urequests.request(
                             'POST',
                             self.backend,
-                            data="{}\t{}".format(now, print_DustResult(data)),
+                            data="{}\t{}\tstatus:{}".format(now, print_DustResult(data), status),
                             headers={
                                 'Content-type': 'application/text'
                             })
@@ -85,7 +86,7 @@ class WorldNoop:
     def __init__(self):
         pass
 
-    async def report(self, data):
+    async def report(self, data, *args, **kwargs):
         pass
 
 
@@ -109,5 +110,5 @@ class Connect:
     def is_connected(self):
         return self.station.isconnected()
 
-    def report(self, data):
-        self.backend.report(data)
+    def report(self, data, status):
+        self.backend.report(data, status)
